@@ -511,6 +511,10 @@ value
    {
       $$ = value_node(FLOAT, (void *)& $1);
    }
+   | T_MBR
+   {
+      $$ = value_node(MBR, (void *)& $1);
+   }
    ;
 
 opt_relname

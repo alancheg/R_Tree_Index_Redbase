@@ -33,6 +33,9 @@ s_num                [+\-]?{num}
                       return T_INT;}
 {s_num}\.{num}       {sscanf(yytext, "%f", &yylval.rval);
                       return T_REAL;}
+[(]{s_num}\.{num}[,]{s_num}\.{num}[,]{s_num}\.{num}[,]{s_num}\.{num}[)]  {sscanf(yytext, "(%f,%f,%f,%f)", &yylval.mval.x_min, &yylval.mval.y_min, &yylval.mval.x_max, &yylval.mval.y_max);
+																			//printf("captured values: %f %f %f %f\n", yylval.mval.x_min, yylval.mval.y_min, yylval.mval.x_max, yylval.mval.y_max);
+																			return T_MBR;}
 {s_num}\.{num}[Ee]{s_num}   {sscanf(yytext, "%f", &yylval.rval);
                              return T_REAL;}
 \"([^\"\n]|(\"\"))*\"       {yylval.sval = get_qstring(yytext, yyleng);

@@ -285,6 +285,13 @@ NODE *value_node(AttrType type, void *value)
     case STRING:
       n->u.VALUE.sval = (char *)value;
       break;
+    case MBR:
+      /*n->u.VALUE.mval.x_min = (*(Mbr *)value).x_min;
+      n->u.VALUE.mval.y_min = (*(Mbr *)value).y_min;
+      n->u.VALUE.mval.x_max = (*(Mbr *)value).x_max;
+      n->u.VALUE.mval.y_max = (*(Mbr *)value).y_max;*/
+      n->u.VALUE.mval = (*(Mbr *)value);
+      break;
     }
     return n;
 }

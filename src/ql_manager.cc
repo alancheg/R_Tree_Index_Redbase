@@ -883,7 +883,7 @@ RC QL_Manager::Insert(const char *relName,
     if((values[i].type != attrEntries[i].attrType))
       badFormat = true;
     // If it's a string, make sure we're not strying to set a smaller string to a larger one
-    if(attrEntries[i].attrType == STRING && (strlen((char *) values[i].data) > attrEntries[i].attrLength))
+    if( attrEntries[i].attrType == STRING && (strlen((char *) values[i].data) > attrEntries[i].attrLength))
       badFormat = true;
   }
   if(badFormat){
@@ -1210,7 +1210,7 @@ RC QL_Manager::CheckUpdateAttrs(const RelAttr &updAttr,
       return (rc);
     if(entry->attrType != rhsValue.type) // check types
       return (QL_BADUPDATE);
-    if(entry->attrType == STRING){ // check the sizes for strings. The LHS must be smaller or equal to RHS
+    if(entry->attrType == STRING || entry->attrType == MBR){ // check the sizes for strings. The LHS must be smaller or equal to RHS
       int newValueSize = strlen((char *)rhsValue.data); 
       if(newValueSize > entry->attrLength)
         return (QL_BADUPDATE);
@@ -1226,7 +1226,7 @@ RC QL_Manager::CheckUpdateAttrs(const RelAttr &updAttr,
       return (rc);
     if(entry1->attrType != entry2->attrType)
       return (QL_BADUPDATE);
-    if(entry1->attrType == STRING){ // check the sizes for strings. The LHS must be smaller or equal to RHS
+    if(entry1->attrType == STRING || entry1->attrType == MBR){ // check the sizes for strings. The LHS must be smaller or equal to RHS
       if(entry2->attrLength > entry1->attrLength)
         return (QL_BADUPDATE);
     }
@@ -1298,7 +1298,7 @@ RC QL_Manager::RunUpdate(QL_Node *topNode, const RelAttr &updAttr,
     
     // Set the attribute to its new value
     if(bIsValue){
-      if(attrEntries[index1].attrType == STRING){
+      if(attrEntries[index1].attrType == STRING || attrEntries[index1].attrType == MBR){
         int valueLength = strlen((char *)rhsValue.data);
         if(attrEntries[index1].attrLength <= (valueLength + 1) )
           memcpy(pData + attrEntries[index1].offset, (char *)rhsValue.data, attrEntries[index1].attrLength);

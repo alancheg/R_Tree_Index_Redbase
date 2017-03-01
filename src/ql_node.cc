@@ -153,7 +153,7 @@ RC QL_Node::CheckConditions(char *recData){
     // If we are comparing this to a value
     if(! condList[i].isValue){
       // If it's not a string, or string of equal length, just compare
-      if(condList[i].type != STRING || condList[i].length == condList[i].length2){
+      if(condList[i].type != STRING || condList[i].type != MBR|| condList[i].length == condList[i].length2){
         int offset2 = condList[i].offset2;
         bool comp = condList[i].comparator((void *)(recData + offset1), (void *)(recData + offset2), 
           condList[i].type, condList[i].length);
@@ -189,7 +189,7 @@ RC QL_Node::CheckConditions(char *recData){
     // Else, we are comparing it to another attribute
     else{
       // If it's not a string, or string of equal length, just compare
-      if(condList[i].type != STRING || condList[i].length == condList[i].length2){
+      if(condList[i].type != STRING || condList[i].type != MBR || condList[i].length == condList[i].length2){
         bool comp = condList[i].comparator((void *)(recData + offset1), condList[i].data, 
           condList[i].type, condList[i].length);
 

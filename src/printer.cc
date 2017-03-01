@@ -80,7 +80,7 @@ Printer::Printer(const DataAttrInfo *attributes_, const int attrCount_)
         else
             strcpy(psHeader[i], attributes[i].attrName);
 
-        if (attributes[i].attrType==STRING)
+        if (attributes[i].attrType==STRING || attributes[i].attrType==MBR)
             spaces[i] = min(attributes[i].attrLength, MAXPRINTSTRING);
         else
             spaces[i] = max(12, strlen(psHeader[i]));
@@ -168,7 +168,7 @@ void Printer::Print(ostream &c, const void * const data[])
     iCount++;
 
     for (i = 0; i<attrCount; i++) {
-        if (attributes[i].attrType == STRING) {
+        if (attributes[i].attrType == STRING || attributes[i].attrType==MBR) {
             // We will only print out the first MAXNAME+10 characters of
             // the string value.
             memset(str,0,MAXPRINTSTRING);
@@ -232,7 +232,7 @@ void Printer::Print(ostream &c, const char * const data)
     iCount++;
 
     for (i = 0; i<attrCount; i++) {
-        if (attributes[i].attrType == STRING) {
+        if (attributes[i].attrType == STRING || attributes[i].attrType==MBR) {
             // We will only print out the first MAXNAME+10 characters of
             // the string value.
             memset(str,0,MAXPRINTSTRING);
