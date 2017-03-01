@@ -484,6 +484,10 @@ static int parse_format_string(char *format_string, AttrType *type, int *len)
          case 's':
          case 'c':
             return E_NOLENGTH;
+         case 'm':
+            *type = MBR;
+            *len = sizeof(Mbr);
+            break;
          default:
             return E_INVFORMATSTRING;
       }

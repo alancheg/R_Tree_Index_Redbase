@@ -73,6 +73,7 @@ QL_Manager *pQlm;          // QL component manager
     CompOp cval;
     float rval;
     char *sval;
+    Mbr mval;
     NODE *n;
 }
 
@@ -118,6 +119,8 @@ QL_Manager *pQlm;          // QL component manager
 %token   <sval>   T_STRING
       T_QSTRING
       T_SHELL_CMD
+
+%token   <mval>   T_MBR
 
 %type   <cval>   op
 

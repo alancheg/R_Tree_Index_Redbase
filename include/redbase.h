@@ -60,7 +60,8 @@ const int ALL_PAGES = -1;
 enum AttrType {
     INT,
     FLOAT,
-    STRING
+    STRING,
+    MBR
 };
 
 //
@@ -76,6 +77,17 @@ enum CompOp {
 //
 enum ClientHint {
     NO_HINT                                     // default value
+};
+
+//
+// MBR Structure
+//
+struct Mbr
+{
+	float x_min;
+	float y_min;
+	float x_max;
+	float y_max;
 };
 
 //
