@@ -163,12 +163,12 @@ void Printer::Print(ostream &c, const void * const data[])
     char str[MAXPRINTSTRING], strSpace[50];
     int i, a;
     float b;
-
+    Mbr m;
     // Increment the number of tuples printed
     iCount++;
 
     for (i = 0; i<attrCount; i++) {
-        if (attributes[i].attrType == STRING || attributes[i].attrType==MBR) {
+        if (attributes[i].attrType == STRING) {
             // We will only print out the first MAXNAME+10 characters of
             // the string value.
             memset(str,0,MAXPRINTSTRING);
@@ -206,6 +206,15 @@ void Printer::Print(ostream &c, const void * const data[])
             else
                 Spaces(strlen(psHeader[i]), strlen(strSpace));
         }
+        if (attributes[i].attrType == MBR) {
+            memcpy (&m, data[i], sizeof(Mbr));
+            sprintf(strSpace, "(%f,%f,%f,%f)",m.x_min,m.y_min,m.x_max,m.y_max);
+            c << strSpace;
+            if (strlen(psHeader[i]) < 12)
+                Spaces(12, strlen(strSpace));
+            else
+                Spaces(strlen(psHeader[i]), strlen(strSpace));
+        }
     }
     c << "\n";
 }
@@ -224,7 +233,8 @@ void Printer::Print(ostream &c, const char * const data)
     char str[MAXPRINTSTRING], strSpace[50];
     int i, a;
     float b;
-
+    Mbr m;
+    
     if (data == NULL)
         return;
 
@@ -232,7 +242,7 @@ void Printer::Print(ostream &c, const char * const data)
     iCount++;
 
     for (i = 0; i<attrCount; i++) {
-        if (attributes[i].attrType == STRING || attributes[i].attrType==MBR) {
+        if (attributes[i].attrType == STRING) {
             // We will only print out the first MAXNAME+10 characters of
             // the string value.
             memset(str,0,MAXPRINTSTRING);
@@ -264,6 +274,15 @@ void Printer::Print(ostream &c, const char * const data)
         if (attributes[i].attrType == FLOAT) {
             memcpy (&b, (data+attributes[i].offset), sizeof(float));
             sprintf(strSpace, "%f",b);
+            c << strSpace;
+            if (strlen(psHeader[i]) < 12)
+                Spaces(12, strlen(strSpace));
+            else
+                Spaces(strlen(psHeader[i]), strlen(strSpace));
+        }
+        if (attributes[i].attrType == MBR) {
+            memcpy (&m, (data+attributes[i].offset), sizeof(Mbr));
+            sprintf(strSpace, "(%f,%f,%f,%f)",m.x_min,m.y_min,m.x_max,m.y_max);
             c << strSpace;
             if (strlen(psHeader[i]) < 12)
                 Spaces(12, strlen(strSpace));

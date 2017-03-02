@@ -665,6 +665,9 @@ ostream &operator<<(ostream &s, const Value &v)
       case STRING:
          s << " (char *)data=" << (char *)v.data;
          break;
+      case MBR:
+         s << " *(Mbr *)data=(" << (*(Mbr *)v.data).x_min << "," << (*(Mbr *)v.data).y_min << "," << (*(Mbr *)v.data).x_max << "," << (*(Mbr *)v.data).y_max<<")";
+         break;
    }
    return s;
 }
