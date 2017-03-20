@@ -25,7 +25,7 @@ struct IX_NodeHeader{
                       // valid key/pointer slots
   int freeSlotIndex;  // the pointer to the beginning of free slots
   PageNum invalid1;
-  PageNum invalid2;
+  //PageNum invalid2;
 };
 
 struct IX_NodeHeader_I{
@@ -37,7 +37,7 @@ struct IX_NodeHeader_I{
   int firstSlotIndex; 
   int freeSlotIndex;
   PageNum firstPage; // first leaf page under this internal node
-  PageNum invalid2;
+  //PageNum invalid2;
 };
 
 struct IX_NodeHeader_L{
@@ -47,19 +47,19 @@ struct IX_NodeHeader_L{
 
   int firstSlotIndex;
   int freeSlotIndex;
-  PageNum nextPage; // next leaf page
-  PageNum prevPage; // previous leaf page
+  PageNum invalid1; // next leaf page
+  //PageNum prevPage; // previous leaf page*/
 };
 
 // This is the header for the bucket pages
-struct IX_BucketHeader{
+/*struct IX_BucketHeader{
   int num_keys;         // number of entries in the bucket
   int firstSlotIndex;   // pointer to the first valid slot in the bucket
   int freeSlotIndex;    // pointer to the first free slot in bucket
   PageNum nextBucket;   // pointer to the next bucket page (in case of 
                         // overflow, i.e. lots of duplicates)
 };
-
+*/
 
 // The following are "entries", or the headers that provide
 // information about each slot
@@ -76,15 +76,5 @@ struct Node_Entry{
   SlotNum slot;     // Pointer to the slot associated with this entry
                     // (only valid for leaf nodes)
 };
-
-// All entries in the bucket will be duplicates of the same value,
-// So we don't have to worry about the isValid flag
-struct Bucket_Entry{  
-  int nextSlot;     // Pointer to the next slot
-  PageNum page;     // Page of record
-  SlotNum slot;     // slot of record
-};
-
-
 
 #endif

@@ -152,6 +152,8 @@ private:
     RC GetIndexFileName(const char *fileName, int indexNo, std::string &indexname);
     // Sets up the IndexHandle internal varables when opening an index
     RC SetUpIH(IX_IndexHandle &ih, PF_FileHandle &fh, struct IX_IndexHeader *header);
+    // Modifies th IndexHandle internal variables when closing an index
+    RC CleanUpIH(IX_IndexHandle &indexHandle);
 
 };
 

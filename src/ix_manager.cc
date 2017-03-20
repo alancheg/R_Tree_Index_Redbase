@@ -87,7 +87,6 @@ RC IX_Manager::CreateIndex(const char *fileName, int indexNo,
     return (rc);
   // Calculate the keys per node and keys per bucket
   int numKeys_N = IX_IndexHandle::CalcNumKeysNode(attrLength);
-  int numKeys_B = IX_IndexHandle::CalcNumKeysBucket(attrLength);
 
   // Create the header and root page
   PageNum headerpage;
@@ -97,33 +96,31 @@ RC IX_Manager::CreateIndex(const char *fileName, int indexNo,
     return (rc);
   }
   struct IX_IndexHeader *header;
-  struct IX_NodeHeader_L *rootheader;
+  struct IX_NodeHeader_L *rootNode;
   struct Node_Entry *entries;
-  if((rc = ph_header.GetData((char *&) header)) || (rc = ph_root.GetData((char *&) rootheader))){
+  if((rc = ph_header.GetData((char *&) header)) || (rc = ph_root.GetData((char *&) rootNode))){
     goto cleanup_and_exit; // if this fails, then destroy the file
   }
 
   // setup header page
   header->attr_type = attrType;
   header->attr_length = attrLength;
-  header->maxKeys_N= numKeys_N;
-  header->maxKeys_B = numKeys_B;
+  header->maxKeys_N = numKeys_N;
   //printf("max i: %d, max l: %d \n", numKeys_N, numKeys_B);
 
   header->entryOffset_N = sizeof(struct IX_NodeHeader_I);
-  header->entryOffset_B = sizeof(struct IX_BucketHeader);
   header->keysOffset_N = header->entryOffset_N + numKeys_N*sizeof(struct Node_Entry);
   header->rootPage = rootpage;
   //header->firstBucket = NO_MORE_PAGES;
 
   // Set up the root node
-  rootheader->isLeafNode = true;
-  rootheader->isEmpty = true;
-  rootheader->num_keys = 0;
-  rootheader->nextPage = NO_MORE_PAGES;
-  rootheader->prevPage = NO_MORE_PAGES;
-  rootheader->firstSlotIndex = NO_MORE_SLOTS;
-  rootheader->freeSlotIndex = 0;
+  rootNode->isLeafNode = true;
+  rootNode->isEmpty = true;
+  rootNode->num_keys = 0;
+  //rootheader->nextPage = NO_MORE_PAGES;
+  //rootheader->prevPage = NO_MORE_PAGES;
+  rootNode->firstSlotIndex = NO_MORE_SLOTS;
+  rootNode->freeSlotIndex = 0;
   entries = (struct Node_Entry *) ((char *)rootheader + header->entryOffset_N);
   for(int i=0; i < header->maxKeys_N; i++){
     entries[i].isValid = UNOCCUPIED;
@@ -245,5 +242,52 @@ RC IX_Manager::OpenIndex(const char *fileName, int indexNo,
  */
 RC IX_Manager::CloseIndex(IX_IndexHandle &indexHandle)
 {
- 
+  RC rc = 0;
+  PF_PageHandle ph;
+  PageNum page;
+  char *pData;
+
+  if(indexHandle.isOpenHandle == false){ // checks that it's a valid index handle
+    return (IX_INVALIDINDEXHANDLE);
+  }
+
+  // rewrite the root page and unpin it
+  PageNum root = indexHandle.header.rootPage;
+  if((rc = indexHandle.pfh.MarkDirty(root)) || (rc = indexHandle.pfh.UnpinPage(root)))
+    return (rc);
+
+  // Check that the header is modified. If so, write that too.
+  if(indexHandle.header_modified == true){
+    if((rc = indexHandle.pfh.GetFirstPage(ph)) || ph.GetPageNum(page))
+      return (rc);
+    if((rc = ph.GetData(pData))){
+      RC rc2;
+      if((rc2 = indexHandle.pfh.UnpinPage(page)))
+        return (rc2);
+      return (rc);
+    }
+    memcpy(pData, &indexHandle.header, sizeof(struct IX_IndexHeader));
+    if((rc = indexHandle.pfh.MarkDirty(page)) || (rc = indexHandle.pfh.UnpinPage(page)))
+      return (rc);
+  }
+
+  // Close the file
+  if((rc = pfm.CloseFile(indexHandle.pfh)))
+    return (rc);
+
+  if((rc = CleanUpIH(indexHandle)))
+    return (rc);
+
+
+  return (rc);
+}
+
+/*
+ * This function modifies the IX_IndexHandle of a file to close it.
+ */
+RC IX_Manager::CleanUpIH(IX_IndexHandle &indexHandle){
+  if(indexHandle.isOpenHandle == false)
+    return (IX_INVALIDINDEXHANDLE);
+  indexHandle.isOpenHandle = false;
+  return (0);
 }

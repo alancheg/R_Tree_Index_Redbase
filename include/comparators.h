@@ -29,13 +29,29 @@ static int compare_float(void *value1, void* value2, int attrLength){
 
 //TODO: add logic to compare mbr
 static int compare_mbr(void *value1, void* value2, int attrLength){
-  /*if((*(float *)value1 < *(float *)value2))
+  printf("%s\n", "comparing mbr");
+  Mbr mbr1 = *(Mbr *)value1; //Mbr to insert
+  Mbr mbr2 = *(Mbr *)value2; //existing Mbr
+
+  //If there is a node whose Mbr contains the Mbr to be inserted
+  if(mbr2.x_min < mbr1.x_min && mbr2.y_min < mbr1.y_min && mbr2.x_max > mbr1.x_max && mbr2.y_max > mbr1.y_max)
     return -1;
-  else if((*(float *)value1 > *(float *)value2))
-    return 1;
   else
-    return 0;*/
-  return 0;
+  {
+    //Calculate original Mbr area
+    int area = (mbr2.x_max - mbr2.x_min)*(mbr2.y_max - mbr2.y_min);
+    Mbr newRect;
+
+    newRect.x_min = mbr1.x_min < mbr2.x_min ? mbr1.x_min : mbr2.x_min;
+    newRect.y_min = mbr1.y_min < mbr2.y_min ? mbr1.y_min : mbr2.y_min;
+    newRect.x_max = mbr1.x_max > mbr2.x_max ? mbr1.x_max : mbr2.x_max;
+    newRect.y_max = mbr1.y_max > mbr2.y_max ? mbr1.y_max : mbr2.y_max;
+    //new area
+    int newArea = (newRect.x_max - newRect.x_min)*(newRect.y_max - newRect.y_min);
+
+    return (newArea - area);
+  }
+
 }
 
 static bool print_string(void *value, int attrLength){
