@@ -27,6 +27,17 @@ static int compare_float(void *value1, void* value2, int attrLength){
     return 0;
 }
 
+//TODO: add logic to compare mbr
+static int compare_mbr(void *value1, void* value2, int attrLength){
+  /*if((*(float *)value1 < *(float *)value2))
+    return -1;
+  else if((*(float *)value1 > *(float *)value2))
+    return 1;
+  else
+    return 0;*/
+  return 0;
+}
+
 static bool print_string(void *value, int attrLength){
   char * str = (char *)malloc(attrLength + 1);
   memcpy(str, value, attrLength+1);
@@ -45,5 +56,11 @@ static bool print_int(void *value, int attrLength){
 static bool print_float(void *value, int attrLength){
   float num = *(float *)value;
   printf("%f ", num);
+  return true;
+}
+
+static bool print_mbr(void *value, int attrLength){
+  Mbr mbr = *(Mbr *)value;
+  printf("(%f, %f, %f, %f) ", mbr.x_min, mbr.y_min, mbr.x_max, mbr.y_max);
   return true;
 }

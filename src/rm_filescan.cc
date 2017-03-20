@@ -144,7 +144,13 @@ RC RM_FileScan::OpenScan (const RM_FileHandle &fileHandle,
       memcpy(this->value, value, 4);
       initializedValue = true;
     }
-    else if(attrType == STRING || attrType == MBR){
+    else if(attrType == STRING){
+      this->value = (void *) malloc(attrLength);
+      memcpy(this->value, value, attrLength);
+      initializedValue = true;
+    }
+    else if(attrType == MBR){
+      //May be have to modify it in future if comparision to be done between MBR values
       this->value = (void *) malloc(attrLength);
       memcpy(this->value, value, attrLength);
       initializedValue = true;
