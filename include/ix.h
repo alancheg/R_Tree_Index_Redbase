@@ -96,6 +96,11 @@ private:
     // leafPage
     RC GetFirstLeafPage(PF_PageHandle &leafPH, PageNum &leafPage);
     RC FindRecordPage(PF_PageHandle &leafPH, PageNum &leafPage, void * key);
+
+    RC DeleteFromNode(struct IX_NodeHeader *nHeader, void *pData, const RID &rid, bool &toDelete);
+    RC DeleteFromLeaf(struct IX_NodeHeader_L *nHeader, void *pData, const RID &rid, bool &toDelete);
+    RC FindPrevIndex(struct IX_NodeHeader *nHeader, int thisIndex, int &prevIndex);
+    RC FindNodeDeleteIndex(struct IX_NodeHeader *nHeader, void *pData, int& index);
 };
 
 //

@@ -29,12 +29,16 @@ static int compare_float(void *value1, void* value2, int attrLength){
 
 //TODO: add logic to compare mbr
 static int compare_mbr(void *value1, void* value2, int attrLength){
-  printf("%s\n", "comparing mbr");
+  //printf("%s\n", "comparing mbr");
   Mbr mbr1 = *(Mbr *)value1; //Mbr to insert
   Mbr mbr2 = *(Mbr *)value2; //existing Mbr
 
+  //printf("Mbr1: (%f,%f,%f,%f)\n", mbr1.x_min, mbr1.y_min, mbr1.x_max, mbr1.y_max);
+  //printf("Mbr2: (%f,%f,%f,%f)\n", mbr2.x_min, mbr2.y_min, mbr2.x_max, mbr2.y_max);
   //If there is a node whose Mbr contains the Mbr to be inserted
-  if(mbr2.x_min < mbr1.x_min && mbr2.y_min < mbr1.y_min && mbr2.x_max > mbr1.x_max && mbr2.y_max > mbr1.y_max)
+  if(mbr2.x_min == mbr1.x_min && mbr2.y_min == mbr1.y_min && mbr2.x_max == mbr1.x_max && mbr2.y_max == mbr1.y_max)
+    return 0;
+  else if(mbr2.x_min < mbr1.x_min && mbr2.y_min < mbr1.y_min && mbr2.x_max > mbr1.x_max && mbr2.y_max > mbr1.y_max)
     return -1;
   else
   {

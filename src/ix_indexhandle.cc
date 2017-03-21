@@ -779,6 +779,40 @@ RC IX_IndexHandle::FindNodeInsertIndex(struct IX_NodeHeader *nHeader,
 }
 
 /*
+ * This finds the index in a node in which to insert a key into, given the node
+ * header and the key to insert. It returns the index to insert into, and whether
+ * there already exists a key of this value in this particular node.
+ */
+RC IX_IndexHandle::FindNodeDeleteIndex(struct IX_NodeHeader *nHeader, 
+  void *pData, int& index){
+  //printf("%s\n", "Finding Index in the Node");
+  // Setup 
+  struct Node_Entry *entries = (struct Node_Entry *)((char *)nHeader + header.entryOffset_N);
+  char *keys = ((char *)nHeader + header.keysOffset_N);
+  Mbr left_mbr = *(Mbr*)pData;
+  //printf("pData: (%f,%f,%f,%f)\n", left_mbr.x_min, left_mbr.y_min, left_mbr.x_max, left_mbr.y_max);
+  // Search until we reach a key which is unoccupied
+  int prev_idx = BEGINNING_OF_SLOTS;
+  int curr_idx = nHeader->firstSlotIndex;
+  //just return the matching Mbr index
+  while(curr_idx != NO_MORE_SLOTS){
+    char *value = keys + header.attr_length * curr_idx;
+    Mbr right_mbr = *(Mbr*) value;
+    if(left_mbr.x_min == right_mbr.x_min && left_mbr.y_min == right_mbr.y_min && 
+            left_mbr.x_max == right_mbr.x_max && left_mbr.y_max == right_mbr.y_max)
+    {
+      index = curr_idx;
+      break;
+    }
+    prev_idx = curr_idx;
+    curr_idx = entries[prev_idx].nextSlot;
+
+  }
+  //printf("%s %d\n", "Found the index: ", index );
+  return (0);
+}
+
+/*
  * This finds the index in a internal node whose rectange needs least enlargment, given the node
  * header and the key. It returns the index of the node where we have to look further
  */
@@ -841,7 +875,35 @@ RC IX_IndexHandle::FindSubTreeNode(struct IX_NodeHeader *nHeader,
 
 RC IX_IndexHandle::DeleteEntry(void *pData, const RID &rid)
 {
-  // Implement this
+  RC rc = 0;
+  if(! isValidIndexHeader() || isOpenHandle == false)
+    return (IX_INVALIDINDEXHANDLE);
+
+  // get root page
+  struct IX_NodeHeader *rHeader;
+  if((rc = rootPH.GetData((char *&)rHeader))){
+    printf("failing here\n");
+    return (rc);
+  }
+
+  // If the root page is empty, then no entries can exist
+  if(rHeader->isEmpty && (! rHeader->isLeafNode) )
+    return (IX_INVALIDENTRY);
+  if(rHeader->num_keys== 0 && rHeader->isLeafNode)
+    return (IX_INVALIDENTRY);
+
+  // toDelete is an indicator for whether to delete this current node
+  // because it has no more contents
+  bool toDelete = false; 
+  if((rc = DeleteFromNode(rHeader, pData, rid, toDelete))) // Delete the value from this node
+    return (rc);
+
+  // If the tree is empty, set the current node to a leaf node.
+  if(toDelete){
+    rHeader->isLeafNode = true;
+  }
+
+  return (rc);
 }
 
 RC IX_IndexHandle::ForcePages()
@@ -973,4 +1035,160 @@ RC IX_IndexHandle::FindRecordPage(PF_PageHandle &leafPH, PageNum &leafPage, void
   leafPH = nextPH;
 
   return (rc);
+}
+
+/*
+ * This function deletes a entry RID/key from a node given its node Header. It returns
+ * a boolean toDelete that indicates whether the current node is empty or not, to signal
+ * to the caller to delete this node
+ */
+RC IX_IndexHandle::DeleteFromNode(struct IX_NodeHeader *nHeader, void *pData, const RID &rid, bool &toDelete){
+  RC rc = 0;
+  toDelete = false;
+  if(nHeader->isLeafNode){ // If it's a leaf node, delete it from there
+    if((rc = DeleteFromLeaf((struct IX_NodeHeader_L *)nHeader, pData, rid, toDelete))){
+      return (rc);
+    }
+  }
+  // else, find the appropriate child node, and delete it from there
+  else{
+    int prevIndex, currIndex;
+    bool isDup;  // Find the index of the chil dnode
+    if((rc = FindNodeInsertIndex(nHeader, pData, currIndex)))
+      return (rc);
+    struct IX_NodeHeader_I *iHeader = (struct IX_NodeHeader_I *)nHeader;
+    struct Node_Entry *entries = (struct Node_Entry *)((char *)nHeader + header.entryOffset_N);
+    
+    PageNum nextNodePage;
+    bool useFirstPage = false;
+    if(currIndex == BEGINNING_OF_SLOTS){ // Use the first slot in the internal node
+      useFirstPage = true;               // as the child that contains this value
+      nextNodePage = iHeader->firstPage;
+      prevIndex = currIndex;
+    }
+    else{ // Otherwise, go down the appropraite page. Also retrieve the index of the
+          // page before this index for deletion purposes
+      if((rc = FindPrevIndex(nHeader, currIndex, prevIndex)))
+        return (rc);
+      nextNodePage = entries[currIndex].page;
+    }
+
+    // Acquire the contents of this child page
+    PF_PageHandle nextNodePH;
+    struct IX_NodeHeader *nextHeader;
+    if((rc = pfh.GetThisPage(nextNodePage, nextNodePH)) || (rc = nextNodePH.GetData((char *&)nextHeader)))
+      return (rc);
+    bool toDeleteNext = false; // indicator for deleting the child page
+    rc = DeleteFromNode(nextHeader, pData, rid, toDeleteNext); // Delete from this child page
+
+    RC rc2 = 0;
+    if((rc2 = pfh.MarkDirty(nextNodePage)) || (rc2 = pfh.UnpinPage(nextNodePage)))
+      return (rc2);
+
+    if(rc == IX_INVALIDENTRY) // If the entry was not found, tell the caller
+      return (rc);
+
+    // If the entry was successfully deleted, check whether to delete this child node
+    if(toDeleteNext){
+      if((rc = pfh.DisposePage(nextNodePage))){ // if so, dispose of page
+        return (rc);
+      }
+      if(useFirstPage == false){ // If the deleted page was the first page, put the 
+                                  // following page into the firstPage slot
+        if(prevIndex == BEGINNING_OF_SLOTS)
+          nHeader->firstSlotIndex = entries[currIndex].nextSlot;
+        else
+          entries[prevIndex].nextSlot = entries[currIndex].nextSlot;
+        entries[currIndex].nextSlot = nHeader->freeSlotIndex;
+        nHeader->freeSlotIndex = currIndex;
+      }
+      else{ // Otherwise, just delete this page from the sequence of slot pointers
+        int firstslot = nHeader->firstSlotIndex;
+        nHeader->firstSlotIndex = entries[firstslot].nextSlot;
+        iHeader->firstPage = entries[firstslot].page;
+        entries[firstslot].nextSlot = nHeader->freeSlotIndex;
+        nHeader->freeSlotIndex = firstslot;
+      }
+      // update counters of this node's contents
+      if(nHeader->num_keys == 0){ // If there are no more keys, and we just deleted
+        nHeader->isEmpty = true;  // the first page, return the indicator to delete this
+        toDelete = true;          // node
+      }
+      else
+        nHeader->num_keys--;
+      
+    }
+
+  }
+
+  return (rc);
+}
+
+/*
+ * This function deletes an entry from a leaf given the header of the leaf. It returns
+ * in toDelete whether this leaf node is empty, and whether to delete it
+ */
+RC IX_IndexHandle::DeleteFromLeaf(struct IX_NodeHeader_L *nHeader, void *pData, const RID &rid, bool &toDelete){
+  RC rc = 0;
+  int prevIndex, currIndex;
+  if((rc = FindNodeDeleteIndex((struct IX_NodeHeader *)nHeader, pData, currIndex)))
+    return (rc);
+
+  // Setup 
+  struct Node_Entry *entries = (struct Node_Entry *)((char *)nHeader + header.entryOffset_N);
+  char *key = (char *)nHeader + header.keysOffset_N;
+
+  if(currIndex== nHeader->firstSlotIndex) // Set up previous index for deletion of key
+    prevIndex = currIndex;                // purposes
+  else{
+    if((rc = FindPrevIndex((struct IX_NodeHeader *)nHeader, currIndex, prevIndex)))
+      return (rc);
+  }
+
+  // if only entry, delete it from the leaf
+  if(entries[currIndex].isValid == OCCUPIED_NEW){
+    PageNum ridPage;
+    SlotNum ridSlot;
+    if((rc = rid.GetPageNum(ridPage)) || (rc = rid.GetSlotNum(ridSlot))){
+      return (rc);
+    }
+    // If this RID and key value don't match, then the entry is not there. Return IX_INVALIDENTRY
+    int compare = comparator((void*)(key + header.attr_length*currIndex), pData, header.attr_length);
+    //printf("compared value: %d\n", compare);
+    if(ridPage != entries[currIndex].page || ridSlot != entries[currIndex].slot || compare != 0 )
+      return (IX_INVALIDENTRY);
+
+    // Otherwise, delete from leaf page
+    if(currIndex == nHeader->firstSlotIndex){
+      nHeader->firstSlotIndex = entries[currIndex].nextSlot;
+    }
+    else
+      entries[prevIndex].nextSlot = entries[currIndex].nextSlot;
+      
+    entries[currIndex].nextSlot = nHeader->freeSlotIndex;
+    nHeader->freeSlotIndex = currIndex;
+    entries[currIndex].isValid = UNOCCUPIED;
+    nHeader->num_keys--; // update the key counter
+  }
+
+  if(nHeader->num_keys == 0){ // If the leaf is now empty, 
+    toDelete = true;          // return the indicator to delete
+  }
+  return (0);
+}
+
+/*
+ * Given a node header, and a valid index, returns the index of the slot
+ * directly preceding the given one in prevIndex.
+ */
+RC IX_IndexHandle::FindPrevIndex(struct IX_NodeHeader *nHeader, int thisIndex, int &prevIndex){
+  struct Node_Entry *entries = (struct Node_Entry *)((char *)nHeader + header.entryOffset_N);
+  int prev_idx = BEGINNING_OF_SLOTS;
+  int curr_idx = nHeader->firstSlotIndex;
+  while(curr_idx != thisIndex){
+    prev_idx = curr_idx;
+    curr_idx = entries[prev_idx].nextSlot;
+  } 
+  prevIndex = prev_idx;
+  return (0);
 }
