@@ -81,6 +81,9 @@ private:
     RC SplitNode(struct IX_NodeHeader *pHeader, struct IX_NodeHeader *oldHeader, PageNum oldPage, int index, 
         int &newKeyIndex, PageNum &newPageNum);
 
+    RC SplitRootNode(struct IX_NodeHeader *pHeader, struct IX_NodeHeader *oldHeader, PageNum newRootPage,
+        PageNum oldPage, int index, int & newKeyIndex, PageNum &newPageNum, void* pData, const RID &rid);
+
     // Inserts a value into a non-full node, or a bucket
     RC InsertIntoNonFullNode(struct IX_NodeHeader *nHeader, PageNum thisNodeNum, void *pData, const RID &rid);
     RC InsertIntoLeafNode(struct IX_NodeHeader *nHeader, PageNum thisNodeNum, void *pData, const RID &rid);

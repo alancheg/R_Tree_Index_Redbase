@@ -87,42 +87,38 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
   if(nHeader->num_keys == header.maxKeys_N){
     //printf("%s\n", "If max number of nodes inserted");
     //Check if this is the Root node
-    PageNum newInternalPage;
-    char *newInternalData;
-    PF_PageHandle newInternalPH;
-    if((rc = CreateNewNode(newInternalPH, newInternalPage, newInternalData, false))){
-      return (rc);
+    if(nHeader == rHeader)
+    {
+      PageNum newInternalPage;
+      char *newInternalData;
+      PF_PageHandle newInternalPH;
+      if((rc = CreateNewNode(newInternalPH, newInternalPage, newInternalData, false))){
+        return (rc);
+      }
+      struct IX_NodeHeader_I *newInternalHeader = (struct IX_NodeHeader_I *)newInternalData;
+      newInternalHeader->isEmpty = false;
+      //This one is dubious \_(-_-)_\
+      
+      newInternalHeader->firstPage = header.rootPage; // update the root node
+      int unused;
+      PageNum unusedPage;
+      // Split the current root node into two nodes, and make the parent the new root node
+      if((rc = SplitRootNode((struct IX_NodeHeader *&)newInternalData, (struct IX_NodeHeader *&)nHeader, newInternalPage,
+        header.rootPage, BEGINNING_OF_SLOTS, unused, unusedPage, pData, rid)))
+        return (rc);
+      if((rc = pfh.MarkDirty(header.rootPage)) || (rc = pfh.UnpinPage(header.rootPage)))
+        return (rc);
+      rootPH = newInternalPH; // reset root PF_PageHandle
+      header.rootPage = newInternalPage;
+      header_modified = true; // New root page has been set, so the index header has been modified
     }
-    struct IX_NodeHeader_I *newInternalHeader = (struct IX_NodeHeader_I *)newInternalData;
-    newInternalHeader->isEmpty = false;
-    //This one is dubious \_(-_-)_\
-    
-    newInternalHeader->firstPage = header.rootPage; // update the root node
+    else
+    {
 
-    int unused;
-    PageNum unusedPage;
-    // Split the current root node into two nodes, and make the parent the new
-    // root node
-    if((rc = SplitNode((struct IX_NodeHeader *&)newInternalData, (struct IX_NodeHeader *&)nHeader, header.rootPage, 
-      BEGINNING_OF_SLOTS, unused, unusedPage)))
-      return (rc);
-    if((rc = pfh.MarkDirty(header.rootPage)) || (rc = pfh.UnpinPage(header.rootPage)))
-      return (rc);
-    rootPH = newInternalPH; // reset root PF_PageHandle
-    header.rootPage = newInternalPage;
-    header_modified = true; // New root page has been set, so the index header has been modified
-
-    // TODO: This insertion part can be moved into SplitNode()
-    // Retrieve the contents of the new Root node
-    struct IX_NodeHeader *useMe;
-    if((rc = newInternalPH.GetData((char *&)useMe))){
-      return (rc);
     }
-    // Insert into the non-full root node
-    if((rc = InsertIntoInternalNode(useMe, header.rootPage, pData, rid)))
-      return (rc);
   }
-  else{
+  else
+  {
    // If node is not full, insert into it
     //printf("%s\n", "Inserting in leaf");
     if((rc = InsertIntoLeafNode(nHeader, header.rootPage, pData, rid))){
@@ -158,6 +154,7 @@ RC IX_IndexHandle::CreateNewNode(PF_PageHandle &ph, PageNum &page, char *&nData,
   nHeader->isEmpty = true;
   nHeader->num_keys = 0;
   nHeader->invalid1 = NO_MORE_PAGES;
+  nHeader->invalid2 = NO_MORE_PAGES;
   nHeader->firstSlotIndex = NO_MORE_SLOTS;
   nHeader->freeSlotIndex = 0;
 
@@ -310,6 +307,255 @@ RC IX_IndexHandle::SplitNode(struct IX_NodeHeader *pHeader, struct IX_NodeHeader
   return (rc);
 }
 
+/*
+ * This function deals with splitting a node:
+ * pHeader - the header of the parent node
+ * oldHeader - the header of the full node to be split
+ * oldPage - the PageNum of the old node to be split
+ * index - the index into which to insert the new node into in the parent node
+ * newKeyIndex - the index of the first key that points to the new node
+ * newPageNum - the page number of the new node
+ */
+RC IX_IndexHandle::SplitRootNode(struct IX_NodeHeader *pHeader, struct IX_NodeHeader *oldHeader, PageNum newRootPage,
+  PageNum oldPage, int index, int & newKeyIndex, PageNum &newPageNum, void* pData, const RID &rid ){
+  RC rc = 0;
+  //printf("********* SPLITING ROOT NODE ********* at index %d \n", index);
+  bool isLeaf = false;  // Determines if the new page should be a leaf page
+  if(oldHeader->isLeafNode == true){
+    isLeaf = true;
+  }
+  //New child Node
+  PageNum newPage;  // Creates the new page, and acquires its headers
+  struct IX_NodeHeader *newHeader;
+  PF_PageHandle newPH;
+  if((rc = CreateNewNode(newPH, newPage, (char *&)newHeader, isLeaf))){
+    return (rc);
+  }
+  ((IX_NodeHeader_L *)newHeader)->parentPage = newRootPage;
+  ((IX_NodeHeader_L *)oldHeader)->parentPage = newRootPage;
+  newPageNum = newPage; // returns new page number
+
+  // Retrieve the appropriate pointers to all the nodes' contents
+  struct Node_Entry *pEntries = (struct Node_Entry *) ((char *)pHeader + header.entryOffset_N);
+  struct Node_Entry *oldEntries = (struct Node_Entry *) ((char *)oldHeader + header.entryOffset_N);
+  struct Node_Entry *newEntries = (struct Node_Entry *) ((char *)newHeader + header.entryOffset_N);
+  char *pKeys = (char *)pHeader + header.keysOffset_N;
+  char *newKeys = (char *)newHeader + header.keysOffset_N;
+  char *oldKeys = (char *)oldHeader + header.keysOffset_N;
+
+  // Linear Split
+  // Search through all the entries in the old entries
+  // and along each dimension find entry whose rectangle has highest
+  // low side and one with lowest high side. Record their separation.
+  int prev_idx1 = BEGINNING_OF_SLOTS;
+  int curr_idx1 = oldHeader->firstSlotIndex;
+
+  int selectIdx1, selectIdx2;
+  Mbr mbr_max_x_min, mbr_max_y_min, mbr_min_x_max, mbr_min_y_max;
+  float max_x_min_v = -1000, max_y_min_v = -1000, min_x_max_v = 1000, min_y_max_v = 1000;
+  float min_x_min_v = 1000, min_y_min_v = 1000, max_x_max_v = -1000, max_y_max_v = -1000;
+  int max_x_min_idx = -1, max_y_min_idx = -1, min_x_max_idx = -1, min_y_max_idx = -1;
+
+  for(int i=0; i < header.maxKeys_N ; i++){
+    //read the value of the node
+    char *oldValue = oldKeys + header.attr_length * curr_idx1;
+    Mbr tempMbr = *(Mbr*)oldValue;
+    //LPS1: Find entry with corresponding values
+    if( tempMbr.x_min > max_x_min_v )
+    {
+      max_x_min_v = tempMbr.x_min;
+      max_x_min_idx = curr_idx1;
+      mbr_max_x_min = *(Mbr*)oldValue;
+    }
+    if( tempMbr.y_min > max_y_min_v)
+    {
+      max_y_min_v = tempMbr.y_min;
+      max_y_min_idx = curr_idx1;
+      mbr_max_y_min = *(Mbr*)oldValue;
+    }
+    if( tempMbr.x_max < min_x_max_v )
+    {
+      min_x_max_v = tempMbr.x_max;
+      min_x_max_idx = curr_idx1;
+      mbr_min_x_max = *(Mbr*)oldValue;
+    }
+    if( tempMbr.y_max < min_y_max_v)
+    {
+      min_y_max_v = tempMbr.y_max;
+      min_y_max_idx = curr_idx1;
+      mbr_min_y_max = *(Mbr*)oldValue;
+    }
+
+    //calculate the entire width on both axises
+    if( tempMbr.x_min < min_x_min_v )
+      min_x_min_v = tempMbr.x_min;
+    if( tempMbr.y_min < min_y_min_v)
+      min_y_min_v = tempMbr.y_min;
+    if( tempMbr.x_max > max_x_max_v )
+      max_x_max_v = tempMbr.x_max;
+    if( tempMbr.y_max < max_y_max_v)
+      min_y_max_v = tempMbr.y_max;
+
+    //LPS2: Normalize
+    float x_norm = abs(min_x_max_v - max_x_min_v)/(max_x_max_v - min_x_min_v);
+    float y_norm = abs(min_y_max_v - max_y_min_v)/(max_y_max_v - min_y_min_v);
+    //LPS3: Select pair with greatest normalized separation
+    if( x_norm > y_norm)
+    {
+      selectIdx1 = max_x_min_idx;
+      selectIdx2 = min_x_max_idx;
+    }
+    else
+    {
+      selectIdx1 = max_y_min_idx;
+      selectIdx2 = min_y_max_idx;
+    }
+    prev_idx1 = curr_idx1;
+    curr_idx1 = oldEntries[prev_idx1].nextSlot;
+  }
+
+  //TODO: Divide between two parts 
+  //oldEntries[prev_idx1].nextSlot = NO_MORE_SLOTS;
+  //set selected index1 as start point of old entries
+  PageNum temp = oldEntries[oldHeader->firstSlotIndex].page;
+  oldEntries[oldHeader->firstSlotIndex].page = oldEntries[selectIdx1].page;
+  oldEntries[selectIdx1].page = temp;
+  //set selected index2 at N/2
+  temp = oldEntries[header.maxKeys_N/2].page;
+  oldEntries[header.maxKeys_N/2].page = oldEntries[selectIdx2].page;
+  oldEntries[selectIdx2].page = temp;
+
+  //Setting correct offsets
+  prev_idx1 = BEGINNING_OF_SLOTS;
+  curr_idx1 = oldHeader->firstSlotIndex;
+  for(int i=0; i < header.maxKeys_N/2 ; i++){
+    prev_idx1 = curr_idx1;
+    curr_idx1 = oldEntries[prev_idx1].nextSlot;
+  }
+
+  // This is the key to use in the parent node to point to the new node we're creating
+  char *parentKey = oldKeys + curr_idx1*header.attr_length; 
+
+  // Now, move the remaining header.maxKeys_N/2 values into the new node
+  int prev_idx2 = BEGINNING_OF_SLOTS;
+  int curr_idx2 = newHeader->freeSlotIndex;
+  while(curr_idx1 != NO_MORE_SLOTS){
+    newEntries[curr_idx2].page = oldEntries[curr_idx1].page;
+    newEntries[curr_idx2].slot = oldEntries[curr_idx1].slot;
+    newEntries[curr_idx2].isValid = oldEntries[curr_idx1].isValid;
+    memcpy(newKeys + curr_idx2*header.attr_length, oldKeys + curr_idx1*header.attr_length, header.attr_length);
+    if(prev_idx2 == BEGINNING_OF_SLOTS){
+      newHeader->freeSlotIndex = newEntries[curr_idx2].nextSlot;
+      newEntries[curr_idx2].nextSlot = newHeader->firstSlotIndex;
+      newHeader->firstSlotIndex = curr_idx2;
+    } 
+    else{
+      newHeader->freeSlotIndex = newEntries[curr_idx2].nextSlot;
+      newEntries[curr_idx2].nextSlot = newEntries[prev_idx2].nextSlot;
+      newEntries[prev_idx2].nextSlot = curr_idx2;
+    }
+    prev_idx2 = curr_idx2;  
+    curr_idx2 = newHeader->freeSlotIndex; // update insert index
+
+    prev_idx1 = curr_idx1;
+    curr_idx1 = oldEntries[prev_idx1].nextSlot;
+    oldEntries[prev_idx1].nextSlot = oldHeader->freeSlotIndex;
+    oldHeader->freeSlotIndex = prev_idx1;
+    oldHeader->num_keys--;
+    newHeader->num_keys++;
+  }
+
+  // Insert data to be inserted in the newly copied Node
+  if((rc = InsertIntoLeafNode(newHeader, newPage, pData, rid)))
+    return (rc);
+
+  // Insert 1st value in the parent key into parent at index specified in parameters
+  int loc = pHeader->freeSlotIndex;
+  // TODO: this need to be modified, parentkey need to be calculated
+  // Search until we reach a key which is unoccupied
+  
+  int prev_idx = BEGINNING_OF_SLOTS;
+  int curr_idx = oldHeader->firstSlotIndex;
+  //traverse all the nodes present
+  Mbr convexMbr;
+  convexMbr.x_min = convexMbr.y_min = 1000;
+  convexMbr.x_min = convexMbr.y_min = -1000;
+  
+  while(curr_idx != NO_MORE_SLOTS){
+    char *value = oldKeys + header.attr_length * curr_idx;
+    Mbr tempMbr = *(Mbr *) value;
+    
+    if(convexMbr.x_min > tempMbr.x_min)
+      convexMbr.x_min = tempMbr.x_min;
+    if(convexMbr.y_min > tempMbr.y_min)
+      convexMbr.y_min = tempMbr.y_min;
+    if(convexMbr.x_max < tempMbr.x_max)
+      convexMbr.x_max = tempMbr.x_max;
+    if(convexMbr.y_max < tempMbr.y_max)
+      convexMbr.y_max = tempMbr.y_max;
+
+    prev_idx = curr_idx;
+    curr_idx = oldEntries[prev_idx].nextSlot;
+
+  }
+
+  memcpy(pKeys + loc * header.attr_length, (char *)&convexMbr, header.attr_length);
+  newKeyIndex = loc;  // return the slot location that points to the old node
+  pEntries[loc].page = oldPage;
+  pEntries[loc].isValid = OCCUPIED_NEW;
+  if(index == BEGINNING_OF_SLOTS){
+    pHeader->freeSlotIndex = pEntries[loc].nextSlot;
+    pEntries[loc].nextSlot = pHeader->firstSlotIndex;
+    pHeader->firstSlotIndex = loc;
+  }
+  else{
+    pHeader->freeSlotIndex = pEntries[loc].nextSlot;
+    pEntries[loc].nextSlot = pEntries[index].nextSlot;
+    pEntries[index].nextSlot = loc;
+  }
+  pHeader->num_keys++;
+
+  //*** Insert 2nd value in the parent key into parent at index specified in parameters
+  loc = pHeader->freeSlotIndex;
+  // Search until we reach a key which is unoccupied
+  
+  prev_idx = BEGINNING_OF_SLOTS;
+  curr_idx = newHeader->firstSlotIndex;
+
+  convexMbr.x_min = convexMbr.y_min = 1000;
+  convexMbr.x_min = convexMbr.y_min = -1000;
+  
+  while(curr_idx != NO_MORE_SLOTS){
+    char *value = newKeys + header.attr_length * curr_idx;
+    Mbr tempMbr = *(Mbr *) value;
+    
+    if(convexMbr.x_min > tempMbr.x_min)
+      convexMbr.x_min = tempMbr.x_min;
+    if(convexMbr.y_min > tempMbr.y_min)
+      convexMbr.y_min = tempMbr.y_min;
+    if(convexMbr.x_max < tempMbr.x_max)
+      convexMbr.x_max = tempMbr.x_max;
+    if(convexMbr.y_max < tempMbr.y_max)
+      convexMbr.y_max = tempMbr.y_max;
+
+    prev_idx = curr_idx;
+    curr_idx = newEntries[prev_idx].nextSlot;
+
+  }
+
+  memcpy(pKeys + loc * header.attr_length, (char *)&convexMbr, header.attr_length);
+  pEntries[loc].page = newPage;
+  pEntries[loc].isValid = OCCUPIED_NEW;
+  pHeader->freeSlotIndex = pEntries[loc].nextSlot;
+  pEntries[loc].nextSlot = pEntries[index].nextSlot;
+  pHeader->num_keys++;
+
+  // Mark the new page as dirty, and unpin it
+  if((rc = pfh.MarkDirty(newPage))||(rc = pfh.UnpinPage(newPage))){
+    return (rc);
+  }
+  return (rc);
+}
 /*
  * This inserts a value and RID into a node given its header and page number. 
  */
@@ -516,7 +762,7 @@ RC IX_IndexHandle::FindNodeInsertIndex(struct IX_NodeHeader *nHeader,
   struct Node_Entry *entries = (struct Node_Entry *)((char *)nHeader + header.entryOffset_N);
   char *keys = ((char *)nHeader + header.keysOffset_N);
 
-  // Search until we reach a key in the node that is greater than the pData entered
+  // Search until we reach a key which is unoccupied
   int prev_idx = BEGINNING_OF_SLOTS;
   int curr_idx = nHeader->firstSlotIndex;
   //just return the first uncoccupied index
