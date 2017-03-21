@@ -33,7 +33,7 @@ QL_NodeRel::QL_NodeRel(QL_Manager &qlm, RelCatEntry *rEntry) : QL_Node(qlm){
   isOpen = false;
   tupleLength = rEntry->tupleLength;
 
-  useIndex = false;
+  useIndex = true;
   indexNo = 0;
   indexAttr = 0;
   void *value = NULL;

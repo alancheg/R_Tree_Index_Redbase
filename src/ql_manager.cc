@@ -83,7 +83,7 @@ RC QL_Manager::Select(int nSelAttrs, const RelAttr selAttrs[],
 
   cout << "   nRelations = " << nRelations << "\n";
   for (i = 0; i < nRelations; i++)
-    cout << "   relations[" << i << "] " << relations[i] << "\n";
+    cout << "   relations[" << i << "]: " << relations[i] << "\n";
 
   cout << "   nCondtions = " << nConditions << "\n";
   for (i = 0; i < nConditions; i++)

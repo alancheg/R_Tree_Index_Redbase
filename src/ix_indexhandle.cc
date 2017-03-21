@@ -114,7 +114,7 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
     }
     else
     {
-
+      //TODO:
     }
   }
   else
@@ -863,8 +863,7 @@ int IX_IndexHandle::CalcNumKeysNode(int attrLength)
  * This function check that the header is a valid header based on the sizes of the attributes,
  * the number of keys, and the offsets. It returns true if it is, and false if it's not
  */
-bool IX_IndexHandle::isValidIndexHeader() const
-{
+bool IX_IndexHandle::isValidIndexHeader() const {
   if(header.maxKeys_N <= 0){
     printf("error 1");
     return false;
@@ -880,4 +879,98 @@ bool IX_IndexHandle::isValidIndexHeader() const
     return false;
   }
   return true;
+}
+
+/*
+ * Returns the Open PF_PageHandle and the page number of the first leaf page in 
+ * this index
+ */
+RC IX_IndexHandle::GetFirstLeafPage(PF_PageHandle &leafPH, PageNum &leafPage){
+  RC rc = 0;
+  struct IX_NodeHeader *rHeader;
+  if((rc = rootPH.GetData((char *&)rHeader))){ // retrieve header info
+    return (rc);
+  }
+
+  // if root node is a leaf:
+  if(rHeader->isLeafNode == true){
+    leafPH = rootPH;
+    leafPage = header.rootPage;
+    return (0);
+  }
+
+  // Otherwise, search down by always going down the first page in each
+  // internal node
+  struct IX_NodeHeader_I *nHeader = (struct IX_NodeHeader_I *)rHeader;
+  PageNum nextPageNum = nHeader->firstPage;
+  PF_PageHandle nextPH;
+  if(nextPageNum == NO_MORE_PAGES)
+    return (IX_EOF);
+  if((rc = pfh.GetThisPage(nextPageNum, nextPH)) || (rc = nextPH.GetData((char *&)nHeader)))
+    return (rc);
+  while(nHeader->isLeafNode == false){ // if it's not a leaf node, unpin it and go
+    PageNum prevPage = nextPageNum;    // to its first child
+    nextPageNum = nHeader->firstPage;
+    if((rc = pfh.UnpinPage(prevPage)))
+      return (rc);
+    if((rc = pfh.GetThisPage(nextPageNum, nextPH)) || (rc = nextPH.GetData((char *&)nHeader)))
+      return (rc);
+  }
+  leafPage = nextPageNum;
+  leafPH = nextPH;
+
+  return (rc);
+}
+
+//May be issue can come in this one...check if any error comes
+RC IX_IndexHandle::FindRecordPage(PF_PageHandle &leafPH, PageNum &leafPage, void *key){
+  RC rc = 0;
+  struct IX_NodeHeader *rHeader;
+  if((rc = rootPH.GetData((char *&) rHeader))){ // retrieve header info
+    return (rc);
+  }
+  // if root node is leaf
+  if(rHeader->isLeafNode == true){
+    leafPH = rootPH;
+    leafPage = header.rootPage;
+    return (0);
+  }
+
+  struct IX_NodeHeader_I *nHeader = (struct IX_NodeHeader_I *)rHeader;
+  int index = BEGINNING_OF_SLOTS;
+  PageNum nextPageNum;
+  PF_PageHandle nextPH;
+  if((rc = FindNodeInsertIndex((struct IX_NodeHeader *)nHeader, key, index)))
+    return (rc);
+  struct Node_Entry *entries = (struct Node_Entry *)((char *)nHeader + header.entryOffset_N);
+  if(index == BEGINNING_OF_SLOTS)
+    nextPageNum = nHeader->firstPage;
+  else
+    nextPageNum = entries[index].page;
+  if(nextPageNum == NO_MORE_PAGES)
+    return (IX_EOF);
+  
+  if((rc = pfh.GetThisPage(nextPageNum, nextPH)) || (rc = nextPH.GetData((char *&)nHeader)))
+    return (rc);
+
+  while(nHeader->isLeafNode == false){
+    if((rc = FindNodeInsertIndex((struct IX_NodeHeader *)nHeader, key, index)))
+      return (rc);
+    
+    entries = (struct Node_Entry *)((char *)nHeader + header.entryOffset_N);
+    PageNum prevPage = nextPageNum;
+    if(index == BEGINNING_OF_SLOTS)
+      nextPageNum = nHeader->firstPage;
+    else
+      nextPageNum = entries[index].page;
+    //char *keys = (char *)nHeader + header.keysOffset_N; 
+    if((rc = pfh.UnpinPage(prevPage)))
+      return (rc);
+    if((rc = pfh.GetThisPage(nextPageNum, nextPH)) || (rc = nextPH.GetData((char *&)nHeader)))
+      return (rc);
+  }
+  leafPage = nextPageNum;
+  leafPH = nextPH;
+
+  return (rc);
 }

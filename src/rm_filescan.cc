@@ -9,7 +9,8 @@
 #include "pf.h"
 #include "rm_internal.h"
 #include <stdlib.h>
-
+#include <cstdio>
+#include <iostream>
 
 RM_FileScan::RM_FileScan(){
   openScan = false; // initially a filescan is not valid
@@ -102,6 +103,7 @@ RC RM_FileScan::OpenScan (const RM_FileHandle &fileHandle,
                   CompOp     compOp,
                   void       *value,
                   ClientHint pinHint) {
+//printf("%s\n", "open record manager file scan");
   // If this is already associated with a scan, return immediately as an error
   if (openScan == true)
     return (RM_INVALIDSCAN);

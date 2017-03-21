@@ -28,6 +28,7 @@ Node_Rel::Node_Rel(QL_Manager &qlm, RelCatEntry* rEntry) : QL_Node(qlm) {
   isOpen = false;
   listsInitialized = false;
   relNameInitialized = true;
+  //Enable to use indexing
   useIndex = false;
   condIndex = 0;
   indexNo = 0;
@@ -115,6 +116,7 @@ RC Node_Rel::AddCondition(const Condition condition){
 }*/
 
 RC Node_Rel::OpenIt(){
+  printf("%s\n", "In OpenIt");
   RC rc = 0;
   isOpen = true;
   if(useIndex){

@@ -7,7 +7,8 @@
 #include <sys/types.h>
 #include "pf.h"
 #include "rm_internal.h"
-
+#include <cstdio>
+#include <iostream>
 
 RM_Manager::RM_Manager(PF_Manager &pfm) : pfm(pfm){
 }
@@ -124,6 +125,7 @@ RC RM_Manager::SetUpFH(RM_FileHandle& fileHandle, PF_FileHandle &fh, struct RM_F
  * given FileHandle must not already be associated with another open file
  */
 RC RM_Manager::OpenFile   (const char *fileName, RM_FileHandle &fileHandle){
+ // printf("%s\n", "open record manager files");
   if(fileName == NULL)
     return (RM_BADFILENAME);
   // if the filehandle is associated with another open file. exit immediately

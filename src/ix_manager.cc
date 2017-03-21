@@ -203,6 +203,7 @@ RC IX_Manager::SetUpIH(IX_IndexHandle &ih, PF_FileHandle &fh, struct IX_IndexHea
 RC IX_Manager::OpenIndex(const char *fileName, int indexNo,
                  IX_IndexHandle &indexHandle)
 {
+  printf("%s\n", "index manager open");
   if(fileName == NULL || indexNo < 0){ // check for valid filename, and valid indexHandle
     return (IX_BADFILENAME);
   }

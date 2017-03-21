@@ -92,6 +92,10 @@ private:
     RC FindNodeInsertIndex(struct IX_NodeHeader *nHeader, void* pData, int& index);
     RC FindSubTreeNode(struct IX_NodeHeader *nHeader, void *pData, int& index);
 
+    // Returns the first leaf page in leafPH, and its page number in
+    // leafPage
+    RC GetFirstLeafPage(PF_PageHandle &leafPH, PageNum &leafPage);
+    RC FindRecordPage(PF_PageHandle &leafPH, PageNum &leafPage, void * key);
 };
 
 //
@@ -118,6 +122,59 @@ public:
 
     // Close index scan
     RC CloseScan();
+private:
+    bool openScan;              // Indicator for whether the scan is being used
+    bool useFirstLeaf;
+    bool scanEnded;     // Indicators for whether the scan has started or 
+    bool scanStarted;   // ended
+    bool hasBucketPinned; // whether the scan has pinned a bucket or a leaf page
+    bool hasLeafPinned;
+    bool initializedValue; // Whether value variable has been initialized (malloced)
+    bool endOfIndexReached; // Whether the end of the scan has been reached
+    bool foundFirstValue;
+    bool foundLastValue;
+
+    int leafSlot;               // the current leaf and bucket slots of the scan
+    int bucketSlot;
+    PageNum currLeafNum;        // the current and next bucket slots of the scan
+    PageNum currBucketNum;
+    PageNum nextBucketNum;
+
+
+    char *currKey;              // the keys of the current record, and the following
+    char *nextKey;              // two records after that
+    char *nextNextKey;
+    char * leafKeys;
+
+    struct IX_NodeHeader_L *leafHeader;     // the scan's current leaf and bucket header
+    struct Node_Entry *leafEntries;
+
+    PF_PageHandle currLeafPH;   // Currently pinned Leaf and Bucket PageHandles
+    
+    IX_IndexHandle *indexHandle;// Pointer to the indexHandle that modifies the
+                                // file that the scan will try to traverse
+    void *value;
+    CompOp compOp;
+
+    // The comparison to determine whether a record satisfies given scan conditions
+    bool (*comparator) (void *, void*, AttrType, int);
+
+    AttrType attrType;
+    int attrLength;
+
+    RID currRID;    // the current RID and the next RID in the scan
+    RID nextRID;
+
+    RC BeginScan(PF_PageHandle &leafPH, PageNum &pageNum);
+    // Sets up the scan private variables to the first entry within the given leaf
+    RC GetFirstEntryInLeaf(PF_PageHandle &leafPH);
+    // Sets up the scan private variables to the appropriate entry within the given leaf
+    RC GetAppropriateEntryInLeaf(PF_PageHandle &leafPH);
+    // Sets up the scan private variables to the next entry in the index
+    RC FindNextValue(); 
+
+    // Sets the RID
+    RC SetRID(bool setCurrent);
 };
 
 //
