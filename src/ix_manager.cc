@@ -117,11 +117,11 @@ RC IX_Manager::CreateIndex(const char *fileName, int indexNo,
   rootNode->isLeafNode = true;
   rootNode->isEmpty = true;
   rootNode->num_keys = 0;
-  //rootheader->nextPage = NO_MORE_PAGES;
-  //rootheader->prevPage = NO_MORE_PAGES;
+  rootNode->parentPage = NO_MORE_PAGES;
+
   rootNode->firstSlotIndex = NO_MORE_SLOTS;
   rootNode->freeSlotIndex = 0;
-  entries = (struct Node_Entry *) ((char *)rootheader + header->entryOffset_N);
+  entries = (struct Node_Entry *) ((char *)rootNode + header->entryOffset_N);
   for(int i=0; i < header->maxKeys_N; i++){
     entries[i].isValid = UNOCCUPIED;
     entries[i].page = NO_MORE_PAGES;
@@ -130,7 +130,7 @@ RC IX_Manager::CreateIndex(const char *fileName, int indexNo,
     else
       entries[i].nextSlot = i+1;
   }
-  //printf("NODE CREATION: entries[0].nextSlot: %d \n", entries[0].nextSlot);
+  printf("NODE CREATION: entries[0].nextSlot: %d \n", entries[0].nextSlot);
 
   // Mark both pages as dirty, and close the file
   cleanup_and_exit:

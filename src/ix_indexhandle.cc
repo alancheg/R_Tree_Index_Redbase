@@ -58,12 +58,14 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
     int subtreeNodeIndex = BEGINNING_OF_SLOTS;
     
     //CL3: Choose subtree
-    if((rc = FindSubTreeNode(nIHeader, pData, subtreeNodeIndex))) // get appropriate index of subtree node
+    if((rc = FindSubTreeNode(nHeader, pData, subtreeNodeIndex))) // get appropriate index of subtree node
       return (rc);
 
     //CL4: choose next node
-    if(subtreeNodeIndex == BEGINNING_OF_SLOTS)
-      nextNodePage = nHeader->firstPage;
+    if(subtreeNodeIndex == -1)
+      break;
+    else if(subtreeNodeIndex == BEGINNING_OF_SLOTS)
+      nextNodePage = ((struct IX_NodeHeader_I *)nHeader)->firstPage;
     else{
       nextNodePage = nodeEntries[subtreeNodeIndex].page;
     }
@@ -80,6 +82,10 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
 
   // If the node is full, create a new empty root node
   if(nHeader->num_keys == header.maxKeys_N){
+    //Check if this is the Root node
+    /*if(nHeader == rHeader)
+    {
+    }*/
     PageNum newInternalPage;
     char *newInternalData;
     PF_PageHandle newInternalPH;
@@ -88,28 +94,31 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
     }
     struct IX_NodeHeader_I *newInternalHeader = (struct IX_NodeHeader_I *)newInternalData;
     newInternalHeader->isEmpty = false;
+    //This one is dubious \_(-_-)_\
+    
     newInternalHeader->firstPage = header.rootPage; // update the root node
 
     int unused;
     PageNum unusedPage;
     // Split the current root node into two nodes, and make the parent the new
     // root node
-    if((rc = SplitNode((struct IX_NodeHeader *&)newRootData, (struct IX_NodeHeader *&)nHeader, header.rootPage, 
+    if((rc = SplitNode((struct IX_NodeHeader *&)newInternalData, (struct IX_NodeHeader *&)nHeader, header.rootPage, 
       BEGINNING_OF_SLOTS, unused, unusedPage)))
       return (rc);
     if((rc = pfh.MarkDirty(header.rootPage)) || (rc = pfh.UnpinPage(header.rootPage)))
       return (rc);
-    rootPH = newRootPH; // reset root PF_PageHandle
-    header.rootPage = newRootPage;
+    rootPH = newInternalPH; // reset root PF_PageHandle
+    header.rootPage = newInternalPage;
     header_modified = true; // New root page has been set, so the index header has been modified
 
+    // TODO: This insertion part can be moved into SplitNode()
     // Retrieve the contents of the new Root node
     struct IX_NodeHeader *useMe;
-    if((rc = newRootPH.GetData((char *&)useMe))){
+    if((rc = newInternalPH.GetData((char *&)useMe))){
       return (rc);
     }
     // Insert into the non-full root node
-    if((rc = InsertIntoNonFullNode(useMe, header.rootPage, pData, rid)))
+    if((rc = InsertIntoInternalNode(useMe, header.rootPage, pData, rid)))
       return (rc);
   }
   else{ // If node is not full, insert into it
@@ -273,7 +282,7 @@ RC IX_IndexHandle::SplitNode(struct IX_NodeHeader *pHeader, struct IX_NodeHeader
   pHeader->num_keys++;
 
   // if is leaf node, update the page pointers to the previous and next leaf node
-  if(isLeaf){
+  /*if(isLeaf){
     struct IX_NodeHeader_L *newLHeader = (struct IX_NodeHeader_L *) newHeader;
     struct IX_NodeHeader_L *oldLHeader = (struct IX_NodeHeader_L *) oldHeader;
     newLHeader->nextPage = oldLHeader->nextPage;
@@ -288,7 +297,7 @@ RC IX_IndexHandle::SplitNode(struct IX_NodeHeader *pHeader, struct IX_NodeHeader
       if((rc = pfh.MarkDirty(newLHeader->nextPage)) || (rc = pfh.UnpinPage(newLHeader->nextPage)))
         return (rc);
     }
-  }
+  }*/
 
   // Mark the new page as dirty, and unpin it
   if((rc = pfh.MarkDirty(newPage))||(rc = pfh.UnpinPage(newPage))){
@@ -312,8 +321,8 @@ RC IX_IndexHandle::InsertIntoNonFullNode(struct IX_NodeHeader *nHeader, PageNum 
   if(nHeader->isLeafNode){
     int prevInsertIndex = BEGINNING_OF_SLOTS;
     bool isDup = false;
-    if((rc = FindNodeInsertIndex(nHeader, pData, prevInsertIndex, isDup))) // get appropriate index
-      return (rc);
+    //if((rc = FindNodeInsertIndex(nHeader, pData, prevInsertIndex, isDup))) // get appropriate index
+    //  return (rc);
     // If it's not a duplicate, then insert a new key for it, and update
     // the slot and page values. 
     if(!isDup){
@@ -344,9 +353,9 @@ RC IX_IndexHandle::InsertIntoNonFullNode(struct IX_NodeHeader *nHeader, PageNum 
     struct IX_NodeHeader_I *nIHeader = (struct IX_NodeHeader_I *)nHeader;
     PageNum nextNodePage;
     int prevInsertIndex = BEGINNING_OF_SLOTS;
-    bool isDup;
-    if((rc = FindNodeInsertIndex(nHeader, pData, prevInsertIndex, isDup)))
-      return (rc);
+    //bool isDup;
+    //if((rc = FindNodeInsertIndex(nHeader, pData, prevInsertIndex, isDup)))
+    //  return (rc);
     if(prevInsertIndex == BEGINNING_OF_SLOTS)
       nextNodePage = nIHeader->firstPage;
     else{
@@ -423,7 +432,7 @@ RC IX_IndexHandle::InsertIntoLeafNode(struct IX_NodeHeader *nHeader, PageNum thi
   }
   else
   {
-    printf("%s\n", "worng node selected...it is not a lead node..you moron!!");
+    printf("%s\n", "worng node selected...it is not a leaf node..you moron!!");
   }
 }
 
@@ -444,8 +453,7 @@ RC IX_IndexHandle::InsertIntoInternalNode(struct IX_NodeHeader *nHeader, PageNum
   struct IX_NodeHeader_I *nIHeader = (struct IX_NodeHeader_I *)nHeader;
   PageNum nextNodePage;
   int prevInsertIndex = BEGINNING_OF_SLOTS;
-  bool isDup;
-  if((rc = FindNodeInsertIndex(nHeader, pData, prevInsertIndex, isDup)))
+  if((rc = FindNodeInsertIndex(nHeader, pData, prevInsertIndex)))
     return (rc);
   if(prevInsertIndex == BEGINNING_OF_SLOTS)
     nextNodePage = nIHeader->firstPage;
@@ -502,11 +510,7 @@ RC IX_IndexHandle::FindNodeInsertIndex(struct IX_NodeHeader *nHeader,
   int curr_idx = nHeader->firstSlotIndex;
   //just return the first uncoccupied index
   while(curr_idx != NO_MORE_SLOTS){
-    //char *value = keys + header.attr_length * curr_idx;
-    //int compared = comparator(pData, (void*) value, header.attr_length);
-    //if(compared == 0)
-    //  isDup = true;
-    if(entries[prev_idx].isValid == UNOCCUPIED)
+    if(entries[curr_idx].isValid == UNOCCUPIED)
       break;
     prev_idx = curr_idx;
     curr_idx = entries[prev_idx].nextSlot;
@@ -529,11 +533,13 @@ RC IX_IndexHandle::FindSubTreeNode(struct IX_NodeHeader *nHeader,
   int prev_idx = BEGINNING_OF_SLOTS;
   int curr_idx = nHeader->firstSlotIndex;
   float min_increased = 1000;
-  int min_idx = NO_MORE_SLOTS;
+  int min_idx = curr_idx;
   float min_area = -1;
   float curr_area = -1;
-  while(curr_idx != NO_MORE_SLOTS){
+  while(curr_idx != NO_MORE_SLOTS && curr_idx <= nHeader->num_keys){
     char *value = keys + header.attr_length * curr_idx;
+    //compare if the value is occupied or not.
+    //If not just insert in it.
     float area_inc = comparator(pData, (void*) value, header.attr_length);
     Mbr cmbr = *(Mbr *)value;
     curr_area = (cmbr.x_max - cmbr.x_min)*(cmbr.y_max - cmbr.y_min);
@@ -601,7 +607,7 @@ int IX_IndexHandle::CalcNumKeysNode(int attrLength)
  */
 bool IX_IndexHandle::isValidIndexHeader() const
 {
-  if(header.maxKeys_N <= 0 || header.maxKeys_B <= 0){
+  if(header.maxKeys_N <= 0){
     printf("error 1");
     return false;
   }

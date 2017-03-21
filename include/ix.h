@@ -25,7 +25,6 @@ struct IX_IndexHeader{
     int keysOffset_N;   // the offset from the header of the beginning of
                         // the keys list in the nodes
     int maxKeys_N;      // Maximum number of entries in buckets and nodes
-    int maxKeys_B;
 
     PageNum rootPage;   // Page number associated with the root page
 };
@@ -84,11 +83,11 @@ private:
 
     // Inserts a value into a non-full node, or a bucket
     RC InsertIntoNonFullNode(struct IX_NodeHeader *nHeader, PageNum thisNodeNum, void *pData, const RID &rid);
-    RC InsertIntoBucket(PageNum page, const RID &rid);
-
+    RC InsertIntoLeafNode(struct IX_NodeHeader *nHeader, PageNum thisNodeNum, void *pData, const RID &rid);
+    RC InsertIntoInternalNode(struct IX_NodeHeader *nHeader, PageNum thisNodeNum, void *pData, const RID &rid);
     // Find the appropriate index to insert the value into
-    RC FindNodeInsertIndex(struct IX_NodeHeader *nHeader, 
-        void* pData, int& index, bool& isDup);
+    RC FindNodeInsertIndex(struct IX_NodeHeader *nHeader, void* pData, int& index);
+    RC FindSubTreeNode(struct IX_NodeHeader *nHeader, void *pData, int& index);
 
 };
 
