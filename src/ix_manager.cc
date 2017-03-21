@@ -79,6 +79,7 @@ RC IX_Manager::CreateIndex(const char *fileName, int indexNo,
     return (rc);
   }
 
+  //printf("%s\n", "Opening file");
   // Make the file
   PF_FileHandle fh;
   PF_PageHandle ph_header;
@@ -86,6 +87,7 @@ RC IX_Manager::CreateIndex(const char *fileName, int indexNo,
   if((rc = pfm.OpenFile(indexname.c_str(), fh)))
     return (rc);
   // Calculate the keys per node and keys per bucket
+  //printf("attribute length: %d\n", attrLength);
   int numKeys_N = IX_IndexHandle::CalcNumKeysNode(attrLength);
 
   // Create the header and root page
@@ -130,7 +132,7 @@ RC IX_Manager::CreateIndex(const char *fileName, int indexNo,
     else
       entries[i].nextSlot = i+1;
   }
-  printf("NODE CREATION: entries[0].nextSlot: %d \n", entries[0].nextSlot);
+  //printf("NODE CREATION: entries[0].nextSlot: %d \n", entries[0].nextSlot);
 
   // Mark both pages as dirty, and close the file
   cleanup_and_exit:

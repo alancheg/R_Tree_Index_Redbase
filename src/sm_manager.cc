@@ -460,7 +460,6 @@ RC SM_Manager::CreateIndex(const char *relName,
     return (rc);
   if((rc = rmm.OpenFile(relName, fh)))
     return (rc);
-
   // scan through the entire file:
   if((rc = fs.OpenScan(fh, INT, 4, 0, NO_OP, NULL))){
     return (rc);
@@ -471,8 +470,13 @@ RC SM_Manager::CreateIndex(const char *relName,
     RID rid;
     if((rc = rec.GetData(pData) || (rc = rec.GetRid(rid)))) // retrieve the record
       return (rc);
+    Mbr *m = (Mbr*)(pData+ aEntry->offset);
+    //printf("MBR: (%f,%f,%f,%f)\n", m->x_min, m->y_min, m->x_max, m->y_max);
     if((rc = ih.InsertEntry(pData+ aEntry->offset, rid))) // insert into index
+    {
+      //printf("%d in sm manager\n", rc );
       return (rc);
+    }
   }
   if((rc = fs.CloseScan()) || (rc = rmm.CloseFile(fh)) || (rc = ixm.CloseIndex(ih)))
     return (rc);
@@ -488,7 +492,7 @@ RC SM_Manager::CreateIndex(const char *relName,
     return (rc);
   if((rc = relcatFH.ForcePages() || (rc = attrcatFH.ForcePages())))
     return (rc);
-
+  printf("%s\n", "Indexing Done..!!");
   return (0);
 }
 

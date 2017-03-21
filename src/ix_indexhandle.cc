@@ -27,6 +27,7 @@ IX_IndexHandle::~IX_IndexHandle()
 //Logic to add R-tree to be handled here
 RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
 {
+  //printf("%s\n", "Insert entry");
   if(isOpenHandle == false){
   }
 
@@ -40,7 +41,7 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
   if((rc = rootPH.GetData((char *&)rHeader))){
     return (rc);
   }
-
+  //printf("%s\n", "Get Root data!!");
   //I1: Find position for new record
 
   //Choose Leaf Algorithm
@@ -51,6 +52,7 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
   //CL2: Descend until leaf is reached
   while(!nHeader->isLeafNode)
   {
+    //printf("%s\n", "checking for leaf node!!");
     PageNum nextNodePage;
     // Retrieve contents of this node
     struct Node_Entry *nodeEntries = (struct Node_Entry *) ((char *)nHeader + header.entryOffset_N);
@@ -78,14 +80,13 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
     nHeader = nextNodeHeader;
   }
 
+  //printf("%s\n", "Leaf node selected");
   //I2: Add Record to leaf node
 
   // If the node is full, create a new empty root node
   if(nHeader->num_keys == header.maxKeys_N){
+    //printf("%s\n", "If max number of nodes inserted");
     //Check if this is the Root node
-    /*if(nHeader == rHeader)
-    {
-    }*/
     PageNum newInternalPage;
     char *newInternalData;
     PF_PageHandle newInternalPH;
@@ -121,8 +122,11 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid)
     if((rc = InsertIntoInternalNode(useMe, header.rootPage, pData, rid)))
       return (rc);
   }
-  else{ // If node is not full, insert into it
+  else{
+   // If node is not full, insert into it
+    //printf("%s\n", "Inserting in leaf");
     if((rc = InsertIntoLeafNode(nHeader, header.rootPage, pData, rid))){
+      //printf("rc in %s: %d\n", "Insertion done", rc);
       return (rc);
     }
   }
@@ -312,7 +316,7 @@ RC IX_IndexHandle::SplitNode(struct IX_NodeHeader *pHeader, struct IX_NodeHeader
 RC IX_IndexHandle::InsertIntoNonFullNode(struct IX_NodeHeader *nHeader, PageNum thisNodeNum, void *pData, 
   const RID &rid){
   RC rc = 0;
-
+  printf("%s\n", "check..insert into non full node");
   // Retrieve contents of this node
   struct Node_Entry *entries = (struct Node_Entry *) ((char *)nHeader + header.entryOffset_N);
   char *keys = (char *)nHeader + header.keysOffset_N;
@@ -407,25 +411,30 @@ RC IX_IndexHandle::InsertIntoLeafNode(struct IX_NodeHeader *nHeader, PageNum thi
   // Retrieve contents of this node
   struct Node_Entry *entries = (struct Node_Entry *) ((char *)nHeader + header.entryOffset_N);
   char *keys = (char *)nHeader + header.keysOffset_N;
-
   // If it is a leaf node, then insert into it
   if(nHeader->isLeafNode){
+    //printf("%s\n", "It is Leaf Node..Thank God!!");
     int prevInsertIndex = BEGINNING_OF_SLOTS;
     if((rc = FindNodeInsertIndex(nHeader, pData, prevInsertIndex))) // get appropriate index
       return (rc);
+    //printf("%s\n", "Index found inserting data");
     int index = nHeader->freeSlotIndex;
     memcpy(keys + header.attr_length * index, (char *)pData, header.attr_length);
+    //printf("%s\n", "data copied");
     entries[index].isValid = OCCUPIED_NEW; // mark it as a single entry
     if((rc = rid.GetPageNum(entries[index].page)) || (rc = rid.GetSlotNum(entries[index].slot)))
       return (rc);
+    //printf("rc after %s is %d\n", "get page num and slot number", rc);
     nHeader->isEmpty = false;
     nHeader->num_keys++;
     nHeader->freeSlotIndex = entries[index].nextSlot;
     if(prevInsertIndex == BEGINNING_OF_SLOTS){
+      //printf("%s\n", "Inserting at the start entry");
       entries[index].nextSlot = nHeader->firstSlotIndex;
       nHeader->firstSlotIndex = index;
     }
     else{
+      //printf("%s\n", "Inserting in the middle of entries");
       entries[index].nextSlot = entries[prevInsertIndex].nextSlot;
       entries[prevInsertIndex].nextSlot = index;
     }
@@ -434,6 +443,7 @@ RC IX_IndexHandle::InsertIntoLeafNode(struct IX_NodeHeader *nHeader, PageNum thi
   {
     printf("%s\n", "worng node selected...it is not a leaf node..you moron!!");
   }
+  return rc;
 }
 
 /*
@@ -501,6 +511,7 @@ RC IX_IndexHandle::InsertIntoInternalNode(struct IX_NodeHeader *nHeader, PageNum
  */
 RC IX_IndexHandle::FindNodeInsertIndex(struct IX_NodeHeader *nHeader, 
   void *pData, int& index){
+  //printf("%s\n", "Finding Index in the Node");
   // Setup 
   struct Node_Entry *entries = (struct Node_Entry *)((char *)nHeader + header.entryOffset_N);
   char *keys = ((char *)nHeader + header.keysOffset_N);
@@ -517,6 +528,7 @@ RC IX_IndexHandle::FindNodeInsertIndex(struct IX_NodeHeader *nHeader,
 
   }
   index = prev_idx;
+  //printf("%s %d\n", "Found the index: ", index );
   return (0);
 }
 

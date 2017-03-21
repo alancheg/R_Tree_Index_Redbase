@@ -104,6 +104,7 @@ RC interp(NODE *n)
 
          errval = pSmm->CreateIndex(n->u.CREATEINDEX.relname,
                n->u.CREATEINDEX.attrname);
+         //printf("%s\n", "insertion done at interp.cc");
          break;
 
       case N_DROPINDEX:            /* for DropIndex() */
