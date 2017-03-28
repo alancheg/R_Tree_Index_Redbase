@@ -1,0 +1,36 @@
+Changes Done to Redbase (mentioned as per github commit order from older one to latest one)
+
+Just a Abstract summary of what i have done in these files. Please refer code for further understanding.
+
+
+- redbase.h : added a MBR enum, and Mbr structure which contains 4 points, x_min, y_min, x_max, y_max
+
+- interp.cc : Added handling of 'm' as Mbr data structre from query when given to create table.
+			: data insertion handling.
+
+- parse.y 	: Handling of MBR added to the file.
+			: Addtion and handling on T_MBR data type from the input.
+
+- sm_manager.cc : Valid Attribute type handling and Printing the values.
+				: Correct offsetting for MBR data strcuture.
+
+- parser_internal.h : Mbr data type addition.
+
+- y.tab.h 	: For Mbr data type compilation issues.
+
+- nodes.cc	: MBR data structure handling
+
+- printer.cc : Printer issues for MBR data type.
+
+- sacn.l :  Taking MBR Input addition in the insertion command.
+
+- comparators.h : Comparision mechanism for MBR data type.
+
+- ix.h : All the definitions of data types and functions in IndexHeader, IndexHandler, IndexManager and IndexScanner class.
+
+- ix_indexhandle.cc, ix_internal.h , ix_manager.cc, ix_indexscan.cc : Insert Node, Delete Node, Search, Split and multiple other funtions
+																		handling for the R-tree.
+
+- rm_filescan.cc : File scan modification for MBR data type.
+
+- ql_noderel.cc : Enable index related functionalities by setting 'useIndex' parameter as true.
