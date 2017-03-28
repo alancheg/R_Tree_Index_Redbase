@@ -129,7 +129,7 @@ select * from data;
 ### Special Thanks
 Yifei Huang (yifeih@cs.stanford.edu)
 
-###Valgrind Use
+### Valgrind Use
 Please ensure you have packages with debug symbols installed. You can do this by following the instructions at DebuggingProgramCrash.
 
 1.Make sure Valgrind is installed.
